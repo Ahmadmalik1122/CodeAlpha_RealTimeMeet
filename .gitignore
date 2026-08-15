@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Environment files — never commit real secrets
+server/.env
+client/.env
+!*.env.example
+
+# Firebase Admin service account key — real credentials, never commit
+server/config/firebase-service-account.json
+
+# Build output
+client/dist/
+client/build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Uploaded user content
+server/uploads/*
+!server/uploads/.gitkeep

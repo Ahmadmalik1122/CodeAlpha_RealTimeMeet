@@ -1,0 +1,439 @@
+@import "tailwindcss";
+
+/* =========================================================================
+   DESIGN SYSTEM — "Presence"
+   A dark, glass-surfaced system built around one idea: real-time collaboration
+   is people showing up together. The signature motif is the aurora gradient
+   (indigo -> violet -> cyan) used as a "presence" signal — on brand marks,
+   active/live states, and the ring around whoever currently has the floor.
+   Everything else stays quiet so that signal reads clearly.
+   ========================================================================= */
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter Tight", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* Surfaces — layered near-black, not pure black, so glass has something
+     to refract against. */
+  --color-surface-0: #08090d;
+  --color-surface-1: #0d0f16;
+  --color-surface-2: #12141d;
+  --color-surface-3: #191c27;
+  --color-surface-4: #232635;
+
+  /* Aurora accent ramp — the one signature color idea in this system. */
+  --color-aurora-indigo: #6366f1;
+  --color-aurora-violet: #8b5cf6;
+  --color-aurora-cyan: #22d3ee;
+
+  --color-accent: #6366f1;
+  --color-accent-strong: #4f46e5;
+  --color-accent-soft: #818cf8;
+
+  --color-danger: #ef4444;
+  --color-danger-strong: #dc2626;
+  --color-live: #f43f5e;
+  --color-warn: #f59e0b;
+  --color-good: #22c55e;
+
+  /* Glass-surface tokens — the actual colors .glass-panel/.input-field/etc
+     resolve to. Kept as their own variables (rather than the hardcoded
+     rgb() values these classes used to have inline) purely so the
+     [data-theme="light"] block below can override them. See "APPEARANCE
+     SETTINGS" further down for the rest of the theming system. */
+  --color-glass-bg: rgb(18 20 29 / 0.72);
+  --color-glass-strong-bg: rgb(13 15 22 / 0.9);
+  --color-glass-border: rgb(255 255 255 / 0.08);
+  --color-input-bg: rgb(255 255 255 / 0.04);
+  --color-input-border: rgb(255 255 255 / 0.09);
+  --color-input-focus-bg: rgb(255 255 255 / 0.06);
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #94a3b8;
+
+  --animate-float-up: float-up 3s ease-out forwards;
+  --animate-float-up-tile: float-up-tile 2.4s ease-out forwards;
+  --animate-aurora-spin: aurora-spin 6s linear infinite;
+  --animate-blob: blob-drift 18s ease-in-out infinite;
+  --animate-fade-in: fade-in 0.35s ease-out both;
+  --animate-scale-in: scale-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-slide-up: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-slide-in-right: slide-in-right 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-icon-pop: icon-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-hand-wave: hand-wave 0.6s ease-in-out infinite;
+  --animate-toast-in: toast-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-toast-out: toast-out 0.22s cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-mic-pulse: mic-pulse 1.8s ease-in-out infinite;
+  --animate-speaking-bar: speaking-bar 0.9s ease-in-out infinite;
+  --animate-speaking-ring: speaking-ring 1.6s ease-in-out infinite;
+  --animate-slide-up-sheet: slide-up-sheet 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes float-up {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-10px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-220px) scale(1);
+  }
+}
+
+/* Same idea as float-up but scaled down to travel within one participant
+   tile's bounds instead of the whole video-grid area. */
+@keyframes float-up-tile {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-90px) scale(1);
+  }
+}
+
+@keyframes aurora-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes blob-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(4%, 6%) scale(1.08); }
+  66% { transform: translate(-3%, -4%) scale(0.96); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Icon "pop" — replayed (via a changing `key`) whenever a mic/camera status
+   flips, so the badge visibly reacts instead of silently swapping. */
+@keyframes icon-pop {
+  0% { transform: scale(0.55); opacity: 0.4; }
+  60% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Gentle waving raised-hand, looping while a hand stays up. */
+@keyframes hand-wave {
+  0%, 100% { transform: rotate(-10deg); }
+  50% { transform: rotate(16deg); }
+}
+
+/* Soft breathing ring behind an actively-muted mic icon, so "off" reads as
+   a live status rather than a static icon swap. */
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(239 68 68 / 0.35); }
+  50% { box-shadow: 0 0 0 6px rgb(239 68 68 / 0); }
+}
+
+/* Equalizer bars next to whoever is currently talking. Each bar is offset
+   by a delay so the three read as one waveform rather than a blink. */
+@keyframes speaking-bar {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+
+/* Soft outward pulse on the active speaker's tile — the same "breathing"
+   language as mic-pulse, in the positive (green) direction. */
+@keyframes speaking-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(52 211 153 / 0.45); }
+  50% { box-shadow: 0 0 0 7px rgb(52 211 153 / 0); }
+}
+
+/* Mobile panels enter as a bottom sheet rather than a side rail. */
+@keyframes slide-up-sheet {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-14px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-10px) scale(0.96); }
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-surface-0);
+  color: var(--color-text-primary);
+  color-scheme: dark;
+}
+
+/* =========================================================================
+   APPEARANCE SETTINGS (Part 2B) — applied by client/src/context/
+   ThemeContext.jsx via data-theme / data-accent / data-font-size attributes
+   on <html>. This *extends* the existing "Presence" design-system tokens
+   above rather than introducing a second styling system: every override
+   below just re-points a CSS variable the app's utility classes already
+   consume (bg-surface-0, .glass-panel, .btn-primary's aurora gradient, …).
+
+   Scope note: the surfaces, panels, inputs and accent gradient defined by
+   these tokens re-theme correctly. Screens that reach for raw Tailwind
+   utilities instead of a token (e.g. a literal `text-white` or
+   `bg-white/6` in a component file, which much of the meeting UI does)
+   keep their original dark-mode appearance regardless of this setting —
+   retheming those individually is a much larger, component-by-component
+   change outside Part 2B's scope. Light mode is most visible on the pages
+   built from these tokens: Settings, Dashboard cards, modals and inputs
+   throughout the app.
+   ========================================================================= */
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --color-surface-0: #f4f5f9;
+  --color-surface-1: #ffffff;
+  --color-surface-2: #eef0f6;
+  --color-surface-3: #e4e7f0;
+  --color-surface-4: #d8dce8;
+
+  --color-glass-bg: rgb(255 255 255 / 0.72);
+  --color-glass-strong-bg: rgb(255 255 255 / 0.88);
+  --color-glass-border: rgb(15 23 42 / 0.08);
+
+  --color-input-bg: rgb(15 23 42 / 0.03);
+  --color-input-border: rgb(15 23 42 / 0.12);
+  --color-input-focus-bg: rgb(15 23 42 / 0.05);
+
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+}
+
+[data-theme="light"] body {
+  background-color: var(--color-surface-0);
+}
+
+/* Accent color — re-points the same three aurora stops every gradient/ring
+   in the app already reads from (aurora-text, aurora-bg, aurora-ring,
+   .btn-primary, .focus-ring), so switching accent doesn't require touching
+   any component. */
+[data-accent="indigo"] {
+  --color-aurora-indigo: #6366f1;
+  --color-aurora-violet: #8b5cf6;
+  --color-aurora-cyan: #22d3ee;
+  --color-accent: #6366f1;
+  --color-accent-strong: #4f46e5;
+  --color-accent-soft: #818cf8;
+}
+
+[data-accent="blue"] {
+  --color-aurora-indigo: #3b82f6;
+  --color-aurora-violet: #0ea5e9;
+  --color-aurora-cyan: #22d3ee;
+  --color-accent: #3b82f6;
+  --color-accent-strong: #2563eb;
+  --color-accent-soft: #60a5fa;
+}
+
+[data-accent="purple"] {
+  --color-aurora-indigo: #a855f7;
+  --color-aurora-violet: #d946ef;
+  --color-aurora-cyan: #818cf8;
+  --color-accent: #a855f7;
+  --color-accent-strong: #9333ea;
+  --color-accent-soft: #c084fc;
+}
+
+[data-accent="green"] {
+  --color-aurora-indigo: #22c55e;
+  --color-aurora-violet: #10b981;
+  --color-aurora-cyan: #34d399;
+  --color-accent: #22c55e;
+  --color-accent-strong: #16a34a;
+  --color-accent-soft: #4ade80;
+}
+
+/* Font size — a root font-size scale so every rem-based Tailwind utility
+   (text-sm, text-xs, spacing, …) scales proportionally app-wide. Unlike
+   the theme/accent tokens above, this one applies uniformly everywhere,
+   including screens built from raw utility classes. */
+[data-font-size="small"] {
+  font-size: 14px;
+}
+[data-font-size="medium"] {
+  font-size: 16px;
+}
+[data-font-size="large"] {
+  font-size: 18px;
+}
+
+/* Respect reduced-motion preferences across every custom animation above. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Slim, dark-aware scrollbars for panels (chat, participants, grid). */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.28);
+}
+
+/* Reusable design-system utilities, layered so Tailwind utilities can still
+   override them without specificity fights. */
+@layer components {
+  .glass-panel {
+    background-color: var(--color-glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--color-glass-border);
+  }
+
+  .glass-panel-strong {
+    background-color: var(--color-glass-strong-bg);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--color-glass-border);
+  }
+
+  .aurora-text {
+    background-image: linear-gradient(
+      100deg,
+      var(--color-aurora-indigo),
+      var(--color-aurora-violet) 55%,
+      var(--color-aurora-cyan)
+    );
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+  }
+
+  .aurora-bg {
+    background-image: linear-gradient(
+      100deg,
+      var(--color-aurora-indigo),
+      var(--color-aurora-violet) 55%,
+      var(--color-aurora-cyan)
+    );
+  }
+
+  .aurora-ring {
+    position: relative;
+  }
+  .aurora-ring::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    padding: 2px;
+    background: conic-gradient(
+      from 0deg,
+      var(--color-aurora-indigo),
+      var(--color-aurora-violet),
+      var(--color-aurora-cyan),
+      var(--color-aurora-indigo)
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: var(--animate-aurora-spin);
+    pointer-events: none;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: white;
+    background-image: linear-gradient(100deg, var(--color-aurora-indigo), var(--color-accent-strong));
+    box-shadow: 0 8px 24px -8px rgb(99 102 241 / 0.55);
+    transition: filter 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .btn-primary:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 10px 28px -6px rgb(99 102 241 / 0.65);
+  }
+  .btn-primary:active {
+    transform: translateY(1px) scale(0.99);
+  }
+  .btn-primary:disabled {
+    filter: grayscale(0.3) brightness(0.8);
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  .input-field {
+    width: 100%;
+    background-color: var(--color-input-bg);
+    border: 1px solid var(--color-input-border);
+    color: var(--color-text-primary);
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .input-field::placeholder {
+    color: rgb(148 163 184 / 0.7);
+  }
+  .input-field:focus {
+    outline: none;
+    border-color: var(--color-accent-soft);
+    background-color: var(--color-input-focus-bg);
+    box-shadow: 0 0 0 4px rgb(99 102 241 / 0.15);
+  }
+
+  /* Keeps floating mobile controls clear of the home indicator / notch. */
+  .safe-bottom {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .focus-ring {
+    outline: none;
+  }
+  .focus-ring:focus-visible {
+    box-shadow: 0 0 0 3px rgb(99 102 241 / 0.45);
+  }
+}
