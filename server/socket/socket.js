@@ -1,5 +1,6 @@
 const { Server } = require("socket.io");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const Meeting = require("../models/Meeting");
 const {
   recordParticipantJoin,
@@ -137,6 +138,24 @@ const initializeSocket = (server) => {
     },
   });
 
+  // Authenticate Socket.IO connections from the same JWT used by REST.
+  // This prevents host detection from depending on a stale/missing client
+  // userId and fixes the case where the meeting creator is incorrectly put
+  // into the waiting room.
+  io.use((socket, next) => {
+    try {
+      const token = socket.handshake.auth?.token;
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        socket.userId = decoded.id ? String(decoded.id) : null;
+      }
+      next();
+    } catch (error) {
+      console.error("Socket JWT verification failed:", error.message);
+      next();
+    }
+  });
+
   io.on("connection", (socket) => {
     console.log("🟢 Connected:", socket.id);
 
@@ -222,7 +241,11 @@ const initializeSocket = (server) => {
 
       socket.meetingId = meetingId;
       socket.userName = userName || "Guest";
-      socket.userId = userId || null;
+
+      // Prefer the authenticated JWT identity. Fall back to the payload only
+      // for backwards compatibility with older clients.
+      const effectiveUserId = socket.userId || userId || null;
+      socket.userId = effectiveUserId;
 
       try {
         const meeting = await Meeting.findOne({ meetingId }).select("host");
@@ -232,7 +255,7 @@ const initializeSocket = (server) => {
           return;
         }
 
-        const isHost = !!(userId && meeting.host.toString() === String(userId));
+        const isHost = !!(effectiveUserId && meeting.host.toString() === String(effectiveUserId));
 
         // The client socket is a long-lived singleton that can be reused
         // across multiple meetings in one browser session (leave meeting A,
@@ -253,7 +276,7 @@ const initializeSocket = (server) => {
 
         // A previously-kicked user (tracked by userId) can't just walk back
         // in — never trust a client-supplied "let me back in" here either.
-        if (userId && kickedUserIds.get(meetingId)?.has(String(userId))) {
+        if (effectiveUserId && kickedUserIds.get(meetingId)?.has(String(effectiveUserId))) {
           socket.emit("waiting-room:error", {
             message: "You were removed from this meeting by the host.",
           });
@@ -285,7 +308,7 @@ const initializeSocket = (server) => {
         socket.leave(hostRoom(meetingId));
 
         const pending = getPendingRequests(meetingId);
-        pending.set(socket.id, { socketId: socket.id, userId: userId || null, userName: socket.userName });
+        pending.set(socket.id, { socketId: socket.id, userId: effectiveUserId, userName: socket.userName });
 
         socket.emit("waiting-room:waiting", { meetingId });
         broadcastPendingList(io, meetingId);
