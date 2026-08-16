@@ -44,7 +44,7 @@ const register = async (req, res) => {
     // user can recover with "resend verification".
     let previewUrl = null;
     try {
-      ({ previewUrl } = await issueVerificationToken(user));
+      ({ previewUrl } = await issueVerificationToken(user, { deferEmail: true }));
     } catch (mailError) {
       console.error("Verification email failed at registration:", mailError.message);
     }

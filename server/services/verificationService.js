@@ -28,7 +28,7 @@ function buildVerifyUrl(rawToken) {
  *
  * Returns { previewUrl, delivered, expiryHours }.
  */
-async function issueVerificationToken(user) {
+async function issueVerificationToken(user, { deferEmail = false } = {}) {
   const rawToken = generateRawToken();
 
   user.verificationToken = hashToken(rawToken);
@@ -42,6 +42,25 @@ async function issueVerificationToken(user) {
     verifyUrl: buildVerifyUrl(rawToken),
     expiryHours: EXPIRY_HOURS,
   });
+
+  // Registration should not wait for the SMTP round-trip. The token is
+  // already persisted above, so the account can safely be acknowledged while
+  // the verification email is sent in the background. Resend still awaits
+  // delivery because that endpoint is specifically about sending the email.
+  if (deferEmail) {
+    setImmediate(() => {
+      sendMail({
+        to: user.email,
+        subject,
+        text,
+        html,
+      }).catch((error) => {
+        console.error("Background verification email failed:", error.message);
+      });
+    });
+
+    return { delivered: false, previewUrl: null, expiryHours: EXPIRY_HOURS };
+  }
 
   const { delivered, previewUrl } = await sendMail({
     to: user.email,
