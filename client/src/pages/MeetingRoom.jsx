@@ -121,6 +121,23 @@ function MeetingRoom() {
   });
   const { notify } = notifications;
 
+  // Connect the socket now that we know the user is authenticated. We use
+  // autoConnect:false in socket.js so the socket never opens an anonymous
+  // connection before auth is ready. The auth callback reads the JWT from
+  // localStorage at connection time, so the server can verify identity
+  // during the handshake rather than trusting a client-supplied userId.
+  // Disconnect on unmount so the next meeting gets a fresh handshake with
+  // an up-to-date token (important after a token refresh or re-login).
+  useEffect(() => {
+    if (!socket.connected) {
+      socket.connect();
+    }
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+
   // Best-effort background refresh of the account's saved preferences, so
   // the *next* meeting joined in this browser reflects any change made in
   // Settings from a different browser/device. Deliberately does not

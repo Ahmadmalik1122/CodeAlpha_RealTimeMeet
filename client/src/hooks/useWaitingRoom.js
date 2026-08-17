@@ -1,18 +1,40 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import socket, { connectAuthenticatedSocket } from "../socket/socket";
+import socket from "../socket/socket";
 
 /**
- * Waiting-room gate. The server verifies the current user from the JWT carried
- * by the Socket.IO connection; the client userId is kept as a compatibility
- * fallback for older deployments.
+ * useWaitingRoom
+ * Host-approval gate that sits in front of the actual meeting (useWebRTC).
+ * Every user — host included — asks to enter through "waiting-room:request".
+ * The server is the source of truth for who the host is (it checks the
+ * Meeting document in Mongo), so:
+ *   - the host is let straight in ("waiting-room:approved" fires almost
+ *     instantly, with isHost: true)
+ *   - anyone else sits in "waiting" until the host approves or rejects them
+ *
+ * Wired to: waiting-room:request, waiting-room:waiting, waiting-room:approved,
+ * waiting-room:rejected, waiting-room:error, waiting-room:pending-list,
+ * waiting-room:respond, waiting-room:cancel
+ *
+ * @param {string} meetingId
+ * @param {string} userId     current user's id (used server-side to verify host)
+ * @param {string} userName
+ * @param {(name: string) => void} [onRequestReceived] fired (host only) when
+ *        a new person shows up in the pending queue
  */
 export default function useWaitingRoom({ meetingId, userId, userName, onRequestReceived }) {
+  // idle -> waiting -> approved | rejected | passcode (or "error" on a bad meeting id)
   const [status, setStatus] = useState("idle");
   const [rejectMessage, setRejectMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isHost, setIsHost] = useState(false);
+  // Whether the last passcode attempt was a wrong guess (vs. never asked yet).
   const [passcodeInvalid, setPasscodeInvalid] = useState(false);
+  // Security state as it stood the moment we were admitted. MeetingRoom
+  // seeds its live security state from this; useMeetingSecurity keeps it
+  // current afterwards via "security:state" broadcasts.
   const [initialSecurity, setInitialSecurity] = useState(null);
+
+  // Host-only: everyone currently sitting in the waiting room.
   const [pendingRequests, setPendingRequests] = useState([]);
 
   const pendingRequestsRef = useRef(pendingRequests);
@@ -75,24 +97,15 @@ export default function useWaitingRoom({ meetingId, userId, userName, onRequestR
     };
   }, [meetingId]);
 
+  // `passcode` is optional — omitted on the first attempt, then re-sent once
+  // the person types one in after a "waiting-room:passcode-required" reply.
   const requestToJoin = useCallback(
     (passcode) => {
       if (!meetingId) return;
-
       setRejectMessage("");
       setErrorMessage("");
       setStatus("waiting");
-
-      // Refresh the JWT on every join attempt. This is important after login:
-      // the old socket module could connect before the token existed.
-      connectAuthenticatedSocket();
-
-      socket.emit("waiting-room:request", {
-        meetingId,
-        userId,
-        userName,
-        passcode,
-      });
+      socket.emit("waiting-room:request", { meetingId, userId, userName, passcode });
     },
     [meetingId, userId, userName]
   );
@@ -111,6 +124,9 @@ export default function useWaitingRoom({ meetingId, userId, userName, onRequestR
     [meetingId]
   );
 
+  const approve = useCallback((socketId) => respond(socketId, true), [respond]);
+  const reject = useCallback((socketId) => respond(socketId, false), [respond]);
+
   return {
     status,
     isHost,
@@ -121,7 +137,7 @@ export default function useWaitingRoom({ meetingId, userId, userName, onRequestR
     pendingRequests,
     requestToJoin,
     cancelRequest,
-    approve: (socketId) => respond(socketId, true),
-    reject: (socketId) => respond(socketId, false),
+    approve,
+    reject,
   };
 }

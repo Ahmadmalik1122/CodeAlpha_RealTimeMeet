@@ -1,6 +1,6 @@
 const { Server } = require("socket.io");
-const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 const Meeting = require("../models/Meeting");
 const {
   recordParticipantJoin,
@@ -138,22 +138,34 @@ const initializeSocket = (server) => {
     },
   });
 
-  // Authenticate Socket.IO connections from the same JWT used by REST.
-  // This prevents host detection from depending on a stale/missing client
-  // userId and fixes the case where the meeting creator is incorrectly put
-  // into the waiting room.
+
+  // ===============================
+  // JWT authentication middleware
+  // ===============================
+  // Runs during the Socket.IO handshake — before any events are processed.
+  // Reads the JWT sent by the client in socket.handshake.auth.token and
+  // verifies it against JWT_SECRET. On success, socket.userId is set to the
+  // authenticated user's MongoDB id (as a plain string so all downstream
+  // comparisons against meeting.host.toString() are straightforward).
+  //
+  // We always call next() — an invalid/missing token is not a hard rejection
+  // (guests can still join meetings through the waiting-room flow). The only
+  // consequence is socket.userId === null, which prevents host recognition.
   io.use((socket, next) => {
-    try {
-      const token = socket.handshake.auth?.token;
-      if (token) {
+    const token = socket.handshake.auth?.token;
+    if (token) {
+      try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        // decoded.id is the user's _id, serialised as a string inside the JWT.
         socket.userId = decoded.id ? String(decoded.id) : null;
+      } catch (_err) {
+        // Expired, tampered, or otherwise invalid token — treat as guest.
+        socket.userId = null;
       }
-      next();
-    } catch (error) {
-      console.error("Socket JWT verification failed:", error.message);
-      next();
+    } else {
+      socket.userId = null;
     }
+    next();
   });
 
   io.on("connection", (socket) => {
@@ -233,19 +245,19 @@ const initializeSocket = (server) => {
     // ===============================
     // Every client asks for entry through here first (host included). We
     // verify who the real host is by checking the Meeting document in Mongo
-    // — never trust a client-supplied "isHost" flag — and either let the
-    // host straight in or park everyone else in the pending queue until the
-    // host approves/rejects them.
-    socket.on("waiting-room:request", async ({ meetingId, userId, userName, passcode } = {}) => {
+    // — never trust a client-supplied "isHost" flag or a client-supplied
+    // userId. socket.userId was set by the JWT middleware during the
+    // handshake, so it is server-verified. The client-supplied userId field
+    // is intentionally ignored here.
+    socket.on("waiting-room:request", async ({ meetingId, userName, passcode } = {}) => {
       if (!meetingId) return;
 
       socket.meetingId = meetingId;
       socket.userName = userName || "Guest";
 
-      // Prefer the authenticated JWT identity. Fall back to the payload only
-      // for backwards compatibility with older clients.
-      const effectiveUserId = socket.userId || userId || null;
-      socket.userId = effectiveUserId;
+      // Use the JWT-verified identity from the handshake middleware.
+      // socket.userId is already set; never overwrite it with a client value.
+      const userId = socket.userId || null;
 
       try {
         const meeting = await Meeting.findOne({ meetingId }).select("host");
@@ -255,7 +267,11 @@ const initializeSocket = (server) => {
           return;
         }
 
-        const isHost = !!(effectiveUserId && meeting.host.toString() === String(effectiveUserId));
+        // Compare the JWT-verified userId with the meeting's stored host id.
+        // Both are plain strings at this point:
+        //   - socket.userId   = String(decoded.id) set in the io.use() middleware
+        //   - meeting.host    = ObjectId stored in Mongo; .toString() gives hex string
+        const isHost = !!(userId && meeting.host.toString() === userId);
 
         // The client socket is a long-lived singleton that can be reused
         // across multiple meetings in one browser session (leave meeting A,
@@ -264,7 +280,7 @@ const initializeSocket = (server) => {
         socket.isHost = isHost;
 
         if (isHost) {
-          if (socket.meetingId !== meetingId || !socket.rooms.has(hostRoom(meetingId))) {
+          if (!socket.rooms.has(hostRoom(meetingId))) {
             socket.join(hostRoom(meetingId));
           }
           const sec = await loadSecurity(meetingId);
@@ -276,7 +292,7 @@ const initializeSocket = (server) => {
 
         // A previously-kicked user (tracked by userId) can't just walk back
         // in — never trust a client-supplied "let me back in" here either.
-        if (effectiveUserId && kickedUserIds.get(meetingId)?.has(String(effectiveUserId))) {
+        if (userId && kickedUserIds.get(meetingId)?.has(userId)) {
           socket.emit("waiting-room:error", {
             message: "You were removed from this meeting by the host.",
           });
@@ -308,7 +324,7 @@ const initializeSocket = (server) => {
         socket.leave(hostRoom(meetingId));
 
         const pending = getPendingRequests(meetingId);
-        pending.set(socket.id, { socketId: socket.id, userId: effectiveUserId, userName: socket.userName });
+        pending.set(socket.id, { socketId: socket.id, userId: userId || null, userName: socket.userName });
 
         socket.emit("waiting-room:waiting", { meetingId });
         broadcastPendingList(io, meetingId);
