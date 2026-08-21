@@ -7,7 +7,10 @@ function getTransporter() {
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || "smtp.gmail.com",
       port: Number(process.env.SMTP_PORT) || 587,
-      secure: false, // STARTTLS on 587
+      secure: false,
+      pool: true,           // ← connection reuse
+      maxConnections: 3,    // ← max parallel
+      maxMessages: 100,     // ← per connection
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
@@ -22,7 +25,6 @@ async function sendMail({ to, subject, html, text }) {
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
       throw new Error("SMTP_USER / SMTP_PASS are not configured");
     }
-
     const transport = getTransporter();
     const info = await transport.sendMail({
       from: process.env.MAIL_FROM || `RealTimeMeet <${process.env.SMTP_USER}>`,
@@ -31,7 +33,6 @@ async function sendMail({ to, subject, html, text }) {
       html,
       text,
     });
-
     console.log(`✅ Email sent via SMTP: ${info.messageId}`);
     return { delivered: true, previewUrl: null };
   } catch (err) {
