@@ -1,54 +1,42 @@
-const { Resend } = require("resend");
+const nodemailer = require("nodemailer");
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let transporter = null;
 
-/**
- * Send email using Resend API.
- *
- * Returns:
- *   { delivered: true, previewUrl: null }
- * or
- *   { delivered: false, previewUrl: null }
- */
+function getTransporter() {
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || "smtp.gmail.com",
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: false, // STARTTLS on 587
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+  }
+  return transporter;
+}
+
 async function sendMail({ to, subject, html, text }) {
   try {
-    if (!process.env.RESEND_API_KEY) {
-      throw new Error("RESEND_API_KEY is not configured");
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      throw new Error("SMTP_USER / SMTP_PASS are not configured");
     }
 
-    if (!process.env.MAIL_FROM) {
-      throw new Error("MAIL_FROM is not configured");
-    }
-
-    const { data, error } = await resend.emails.send({
-      from: process.env.MAIL_FROM,
+    const transport = getTransporter();
+    const info = await transport.sendMail({
+      from: process.env.MAIL_FROM || `RealTimeMeet <${process.env.SMTP_USER}>`,
       to,
       subject,
       html,
       text,
     });
 
-    if (error) {
-      console.error("❌ Resend email failed:", error);
-      return {
-        delivered: false,
-        previewUrl: null,
-      };
-    }
-
-    console.log(`✅ Email sent successfully via Resend: ${data.id}`);
-
-    return {
-      delivered: true,
-      previewUrl: null,
-    };
-  } catch (error) {
-    console.error("❌ Failed to send email via Resend:", error.message);
-
-    return {
-      delivered: false,
-      previewUrl: null,
-    };
+    console.log(`✅ Email sent via SMTP: ${info.messageId}`);
+    return { delivered: true, previewUrl: null };
+  } catch (err) {
+    console.error("❌ SMTP email error:", err.message);
+    return { delivered: false, previewUrl: null };
   }
 }
 
