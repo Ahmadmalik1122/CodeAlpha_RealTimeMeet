@@ -1,42 +1,37 @@
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
-let transporter = null;
+let resend = null;
 
-function getTransporter() {
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || "smtp.gmail.com",
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: false,
-      pool: true,           // ← connection reuse
-      maxConnections: 3,    // ← max parallel
-      maxMessages: 100,     // ← per connection
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+function getResend() {
+  if (!resend) {
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error("RESEND_API_KEY is not configured");
+    }
+    resend = new Resend(process.env.RESEND_API_KEY);
   }
-  return transporter;
+  return resend;
 }
 
 async function sendMail({ to, subject, html, text }) {
   try {
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      throw new Error("SMTP_USER / SMTP_PASS are not configured");
-    }
-    const transport = getTransporter();
-    const info = await transport.sendMail({
-      from: process.env.MAIL_FROM || `RealTimeMeet <${process.env.SMTP_USER}>`,
+    const client = getResend();
+    const { data, error } = await client.emails.send({
+      from: process.env.MAIL_FROM || "RealTimeMeet <onboarding@resend.dev>",
       to,
       subject,
       html,
       text,
     });
-    console.log(`✅ Email sent via SMTP: ${info.messageId}`);
+
+    if (error) {
+      console.error("❌ Resend email error:", error.message || error);
+      return { delivered: false, previewUrl: null };
+    }
+
+    console.log(`✅ Email sent via Resend: ${data?.id}`);
     return { delivered: true, previewUrl: null };
   } catch (err) {
-    console.error("❌ SMTP email error:", err.message);
+    console.error("❌ Resend email error:", err.message);
     return { delivered: false, previewUrl: null };
   }
 }
